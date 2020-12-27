@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Hausarbeit StRef Maximilian Huber: Entwicklung von Simulationen zur Wellenlehre in der Jahrgangsstufe 10 und deren Einsatz im Unterricht</title>
+<script src="libs/d3.v3.min.js" charset="utf-8"></script>
+<script src="libs/webgl-utils.js" charset="utf-8"></script>
+<script src="webgl.js" charset="utf-8"></script>
+<script src="menu.js"></script>
+<script src="simulations.js"></script>
+<script src="wavetrough.js"></script> <!-- sgv -->
+<script src="wave.js"></script>
+<script src="electron.js"></script>
+<script src="wavetrough_webgl.js"></script>
+<script id="wavet1-fs" type="x-shader/x-fragment">
+  precision highp float;
+  varying vec2 pos;
+  varying float varTime;
+  varying vec2 varMousePos;
+  varying vec2 varWaveEmitter[NR_OF_WAVEEMITTERS];
+  const float T=float(PERIODIC_TIME);
+  const float lambda=float(LAMBDA);
+  #ifdef SHOW_INTENSITY 
+  const float varIntensity = 0.9;
+  #endif
+  float getIntensity(vec2 apos)
+  {
+    float a=0.0;
+    for(int i=0;i<NR_OF_WAVEEMITTERS;i++)
+    {
+      float x=varWaveEmitter[i].x-apos.x*2.0;
+      float y=varWaveEmitter[i].y-apos.y;
+      float r=sqrt(x*x+y*y);
+      a += sin(2.0*M_PI*(varTime/T-r/lambda));
+    }
+    a/=2.0;
+    a/=float(NR_OF_WAVEEMITTERS);
+    a+=0.5;
+    return a;
+  }
+
+  void main(void) 
+  {
+    float a;
+    #ifdef SHOW_INTENSITY
+    if(pos.x<varIntensity)
+      a=getIntensity(pos);
+    else
+    {
+      if(getIntensity(varMousePos)>pos.y/2.0+0.5)
+        a=0.0;
+      else
+        a=1.0; 
+    }
+    #else
+    a=getIntensity(pos);
+    #endif
+    gl_FragColor=vec4(a,a,a,1.0);
+  }
+
+</script>
+
+<script id="wavet-plane-fs" type="x-shader/x-fragment">
+  precision highp float;
+  varying vec2 pos;
+  varying float varTime;
+  const float T=float(PERIODIC_TIME);
+  const float lambda=float(LAMBDA);
+
+  void main(void) 
+  {
+    float a = sin(2.0*M_PI*(varTime/T-pos.x*2.0/lambda));
+    gl_FragColor=vec4(a,a,a,1.0);
+  }
+</script>
+
+<script id="wavet-plane-gaps-fs" type="x-shader/x-fragment">
+  precision highp float;
+  varying vec2 pos;
+  varying float varTime;
+  const float T=float(PERIODIC_TIME);
+  const float lambda=float(LAMBDA);
+  varying vec2 varWaveEmitter[NR_OF_WAVEEMITTERS];
+
+  float getIntensity(vec2 apos)
+  {
+    float a=0.0;
+    for(int i=0;i<NR_OF_WAVEEMITTERS;i++)
+    {
+      float x=varWaveEmitter[i].x-apos.x*2.0;
+      float y=varWaveEmitter[i].y-apos.y;
+      float r=sqrt(x*x+y*y);
+      a += sin(2.0*M_PI*(varTime/T-r/lambda));
+    }
+    a/=2.0;
+    a/=float(NR_OF_WAVEEMITTERS);
+    a+=0.5;
+    return a;
+  }
+
+  void main(void) 
+  {
+    float a;
+    if(pos.x<-0.8)
+      a = sin(2.0*M_PI*(varTime/T+(-0.8-pos.x)*2.0/lambda));
+    else
+      a = getIntensity(pos);
+    gl_FragColor=vec4(a,a,a,1.0);
+  }
+</script>
+
+<script id="wavet-plane-diffraction-fs" type="x-shader/x-fragment">
+  precision highp float;
+  varying vec2 pos;
+  varying float varTime;
+  const float T=float(PERIODIC_TIME);
+  const float lambda=float(LAMBDA);
+  varying float varD; 
+  float getIntensity(vec2 apos)
+  {
+    float a=0.0;
+    const int nr=50;
+    for(int i=-nr;i<nr+1;i++)
+    {
+      float x=-1.6-apos.x*2.0;
+      float y=float(i)*varD/float(nr)-apos.y;
+      float r=sqrt(x*x+y*y);
+      a += sin(2.0*M_PI*(varTime/T-r/lambda));
+    }
+    a/=2.0;
+    a/=(2.0*float(nr)+1.0);
+    a+=0.5;
+    return a;
+  }
+
+  void main(void) 
+  {
+    float a;
+    if(pos.x<-0.8)
+      a = sin(2.0*M_PI*(varTime/T+(-0.8-pos.x)*2.0/lambda));
+    else
+      a = getIntensity(pos);
+    gl_FragColor=vec4(a,a,a,1.0);
+  }
+</script>
+
+<script id="wavet1-vs" type="x-shader/x-vertex">
+  attribute vec2 aVertexPosition;
+  uniform float theTime;
+  varying float varTime;
+  varying vec2 pos;
+  uniform vec2 mousePos;
+  varying vec2 varMousePos;
+  uniform vec2 waveEmitter[NR_OF_WAVEEMITTERS];
+  varying vec2 varWaveEmitter[NR_OF_WAVEEMITTERS];
+  uniform float theD;
+  varying float varD;
+  void main(void) 
+  {
+    gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    pos=aVertexPosition;
+    varTime=theTime;
+    varMousePos=mousePos;
+    varD=theD;
+    for(int i=0;i<NR_OF_WAVEEMITTERS;i++)
+    {
+      varWaveEmitter[i].x=waveEmitter[i].x;
+      varWaveEmitter[i].y=waveEmitter[i].y;
+    }
+  }
+</script>
+
+
+<style>
+    body { margin: 0; }
+    svg {
+      position: absolute;
+      top: 50;
+      left: 0;
+    }
+    .overlay { fill: transparent; }
+  </style>
+
+<body>
+  <div> StRef Maximilian Huber - Simulationen zur Hausarbeit. Für machen Simulationen wird <a target="_blank" href="http://get.webgl.org/">WebGL</a> benötigt</div>
+  <div id="menu1"></div>
+  <div id="menu2"></div>
+  <div id="form1"></div>
+<script>drawMainPage();</script>
+</body>
